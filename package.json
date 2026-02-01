@@ -1,0 +1,40 @@
+{
+  "name": "cc-switch",
+  "version": "1.0.0",
+  "description": "Profile manager for Claude Code settings",
+  "type": "module",
+  "bin": {
+    "cc-switch": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "cli",
+    "profile-manager",
+    "settings"
+  ],
+  "author": "Arav",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.0.0",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.10",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.3"
+  }
+}
