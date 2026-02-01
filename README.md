@@ -167,4 +167,4 @@ All operations use atomic file writes to prevent data loss.
 
 ## License
 
-MIT
+[MIT](LICENSE)
