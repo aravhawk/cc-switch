@@ -26,6 +26,11 @@ pnpm link --global
 
 # Publish to npm
 pnpm publish --access public
+
+# Release helpers (bump + push tag)
+pnpm release:patch
+pnpm release:minor
+pnpm release:major
 ```
 
 ## Architecture Overview
