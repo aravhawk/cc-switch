@@ -25,7 +25,7 @@ node dist/index.js [command]
 pnpm link --global
 
 # Publish to npm
-pnpm publish
+pnpm publish --access public
 ```
 
 ## Architecture Overview
@@ -140,10 +140,10 @@ Before publishing to npm:
 2. Run `pnpm build` and verify `dist/index.js` has shebang
 3. Test CLI locally with `node dist/index.js`
 4. Verify `package.json` files field includes only dist/, README.md, LICENSE
-5. Run `pnpm publish` (must be logged into npm)
+5. Run `pnpm publish --access public` (must be logged into npm)
 
 ## CI Publishing (GitHub Actions)
 
 - Trigger: Release `published`
-- Workflow: `.github/workflows/publish.yml`
+- Workflow: `.github/workflows/publish.yml` (publishes with `--access public`)
 - Secret: `NPM_TOKEN` with publish access and 2FA bypass

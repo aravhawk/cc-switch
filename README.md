@@ -5,13 +5,13 @@ Profile manager for Claude Code settings. Easily manage and switch between multi
 ## Installation
 
 ```bash
-npm install -g cc-switch
+npm install -g @aravhawk/cc-switch
 ```
 
 Or with pnpm:
 
 ```bash
-pnpm add -g cc-switch
+pnpm add -g @aravhawk/cc-switch
 ```
 
 ## Usage
