@@ -259,9 +259,27 @@ async function interactiveMode() {
 }
 
 // Parse arguments and determine mode
-program.parse();
+const rawArgs = process.argv.slice(2);
+const knownCommands = new Set(['switch', 'create', 'delete', 'rename', 'list']);
+const firstArg = rawArgs[0];
+const isFlag = firstArg?.startsWith('-');
 
-// If no command was provided, run interactive mode
-if (!process.argv.slice(2).length) {
-  interactiveMode();
+if (rawArgs.length === 1 && firstArg && !knownCommands.has(firstArg) && !isFlag) {
+  (async () => {
+    try {
+      await switchProfile(firstArg);
+      console.log(`Switched to profile "${firstArg}"`);
+      process.exit(0);
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  })();
+} else {
+  program.parse();
+
+  // If no command was provided, run interactive mode
+  if (!rawArgs.length) {
+    interactiveMode();
+  }
 }
