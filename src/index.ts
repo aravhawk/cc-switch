@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import * as clack from '@clack/prompts';
+import { createRequire } from 'module';
 import {
   listProfiles,
   switchProfile,
@@ -8,8 +9,24 @@ import {
   renameProfile,
   getActiveProfileStatus,
 } from './profiles.js';
+import { validateProfileName } from './validation.js';
 import type { ActiveProfileStatus } from './types.js';
 
+const require = createRequire(import.meta.url);
+
+function getCliVersion(): string {
+  try {
+    const pkg = require('../package.json') as { version?: string };
+    if (pkg && typeof pkg.version === 'string') {
+      return pkg.version;
+    }
+  } catch {
+    return 'unknown';
+  }
+  return 'unknown';
+}
+
+const cliVersion = getCliVersion();
 const program = new Command();
 
 function formatActiveProfileLine(status: ActiveProfileStatus): string {
@@ -17,108 +34,47 @@ function formatActiveProfileLine(status: ActiveProfileStatus): string {
   return `Current profile: "${status.name}"${missingSuffix}`;
 }
 
+function getProfileValidationMessage(value?: string): string | undefined {
+  const validation = validateProfileName(value ?? '');
+  if (!validation.valid) {
+    return validation.error ?? 'Profile name is invalid';
+  }
+  return undefined;
+}
+
+async function showProfileList(
+  profiles?: Awaited<ReturnType<typeof listProfiles>>
+): Promise<void> {
+  const activeStatus = await getActiveProfileStatus();
+  const resolvedProfiles = profiles ?? await listProfiles();
+
+  console.log(formatActiveProfileLine(activeStatus));
+
+  if (resolvedProfiles.length === 0) {
+    console.log('No profiles found');
+    return;
+  }
+
+  console.log('\nProfiles:');
+  for (const profile of resolvedProfiles) {
+    const marker = profile.isActive ? ' (active)' : '';
+    console.log(`  ${profile.name}${marker}`);
+  }
+  console.log();
+}
+
 program
   .name('cc-switch')
   .description('Profile manager for Claude Code settings')
-  .version('1.0.0');
-
-program
-  .command('switch <name>')
-  .description('Switch to a different profile')
-  .action(async (name: string) => {
-    try {
-      await switchProfile(name);
-      console.log(`Switched to profile "${name}"`);
-      process.exit(0);
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
-      process.exit(1);
-    }
-  });
-
-program
-  .command('create <name>')
-  .description('Create a new profile from current settings')
-  .action(async (name: string) => {
-    try {
-      await createProfile(name);
-      console.log(`Created profile "${name}"`);
-      process.exit(0);
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
-      process.exit(1);
-    }
-  });
-
-program
-  .command('delete <name>')
-  .description('Delete a profile')
-  .action(async (name: string) => {
-    try {
-      await deleteProfile(name);
-      console.log(`Deleted profile "${name}"`);
-      process.exit(0);
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
-      process.exit(1);
-    }
-  });
-
-program
-  .command('rename <oldName> <newName>')
-  .description('Rename a profile')
-  .action(async (oldName: string, newName: string) => {
-    try {
-      await renameProfile(oldName, newName);
-      console.log(`Renamed profile "${oldName}" to "${newName}"`);
-      process.exit(0);
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
-      process.exit(1);
-    }
-  });
-
-program
-  .command('current')
-  .description('Show the current active profile')
-  .action(async () => {
-    try {
-      const activeStatus = await getActiveProfileStatus();
-      console.log(formatActiveProfileLine(activeStatus));
-      process.exit(0);
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
-      process.exit(1);
-    }
-  });
-
-program
-  .command('list')
-  .description('List all profiles')
-  .action(async () => {
-    try {
-      const profiles = await listProfiles();
-      const activeStatus = await getActiveProfileStatus();
-
-      console.log(formatActiveProfileLine(activeStatus));
-
-      if (profiles.length === 0) {
-        console.log('No profiles found');
-        process.exit(0);
-      }
-
-      console.log('\nProfiles:');
-      for (const profile of profiles) {
-        const marker = profile.isActive ? ' (active)' : '';
-        console.log(`  ${profile.name}${marker}`);
-      }
-      console.log();
-      process.exit(0);
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
-      process.exit(1);
-    }
-  });
+  .version(cliVersion, '-V, --version', 'output the version number')
+  .argument('[profile]', 'Profile name to switch to')
+  .option('--switch <name>', 'Switch to a different profile')
+  .option('--create <name>', 'Create a new profile from current settings')
+  .option('--delete <name>', 'Delete a profile')
+  .option('--rename <names...>', 'Rename a profile')
+  .option('--to <name>', 'New name for rename')
+  .option('--current', 'Show the current active profile')
+  .option('--list', 'List all profiles');
 
 // Interactive mode (no args)
 async function interactiveMode() {
@@ -128,7 +84,7 @@ async function interactiveMode() {
     const profiles = await listProfiles();
 
     if (profiles.length === 0) {
-      clack.outro('No profiles found. Create one with: cc-switch create <name>');
+      clack.outro('No profiles found. Create one with: cc-switch --create <name>');
       process.exit(0);
     }
 
@@ -181,10 +137,7 @@ async function interactiveMode() {
         const profileName = await clack.text({
           message: 'Enter new profile name:',
           validate: (value) => {
-            if (!value) return 'Profile name is required';
-            if (!/^[A-Za-z0-9-_]+$/.test(value)) {
-              return 'Profile name can only contain letters, numbers, hyphens, and underscores';
-            }
+            return getProfileValidationMessage(value);
           },
         });
 
@@ -259,10 +212,7 @@ async function interactiveMode() {
         const newName = await clack.text({
           message: 'Enter new profile name:',
           validate: (value) => {
-            if (!value) return 'Profile name is required';
-            if (!/^[A-Za-z0-9-_]+$/.test(value)) {
-              return 'Profile name can only contain letters, numbers, hyphens, and underscores';
-            }
+            return getProfileValidationMessage(value);
           },
         });
 
@@ -277,14 +227,7 @@ async function interactiveMode() {
       }
 
       case 'list': {
-        const activeStatus = await getActiveProfileStatus();
-        console.log(formatActiveProfileLine(activeStatus));
-        console.log('\nProfiles:');
-        for (const profile of profiles) {
-          const marker = profile.isActive ? ' (active)' : '';
-          console.log(`  ${profile.name}${marker}`);
-        }
-        console.log();
+        await showProfileList(profiles);
         clack.outro('Profile list complete');
         break;
       }
@@ -297,28 +240,157 @@ async function interactiveMode() {
   }
 }
 
-// Parse arguments and determine mode
-const rawArgs = process.argv.slice(2);
-const knownCommands = new Set(['switch', 'create', 'delete', 'rename', 'list', 'current']);
-const firstArg = rawArgs[0];
-const isFlag = firstArg?.startsWith('-');
+async function runCli(): Promise<void> {
+  const rawArgs = process.argv.slice(2);
 
-if (rawArgs.length === 1 && firstArg && !knownCommands.has(firstArg) && !isFlag) {
-  (async () => {
+  if (!rawArgs.length) {
+    await interactiveMode();
+    return;
+  }
+
+  if (rawArgs.length === 1) {
+    const singleArg = rawArgs[0];
+    if (singleArg === 'help') {
+      program.outputHelp();
+      return;
+    }
+    if (singleArg === 'version') {
+      console.log(cliVersion);
+      return;
+    }
+  }
+
+  program.parse();
+
+  const opts = program.opts<{
+    switch?: string;
+    create?: string;
+    delete?: string;
+    rename?: string[];
+    to?: string;
+    current?: boolean;
+    list?: boolean;
+  }>();
+
+  const profileArg = program.args[0] as string | undefined;
+  const actionFlags: string[] = [];
+
+  if (opts.switch) actionFlags.push('switch');
+  if (opts.create) actionFlags.push('create');
+  if (opts.delete) actionFlags.push('delete');
+  if (opts.rename || opts.to) actionFlags.push('rename');
+  if (opts.current) actionFlags.push('current');
+  if (opts.list) actionFlags.push('list');
+
+  if (actionFlags.length > 1) {
+    console.error('Error: Please provide only one action flag at a time.');
+    process.exit(1);
+  }
+
+  if (profileArg && actionFlags.length > 0) {
+    console.error('Error: Do not combine a profile name with action flags.');
+    process.exit(1);
+  }
+
+  if (actionFlags.length === 0) {
+    if (!profileArg) {
+      program.outputHelp();
+      process.exit(0);
+      return;
+    }
+
     try {
-      await switchProfile(firstArg);
-      console.log(`Switched to profile "${firstArg}"`);
+      await switchProfile(profileArg);
+      console.log(`Switched to profile "${profileArg}"`);
       process.exit(0);
     } catch (error: any) {
       console.error(`Error: ${error.message}`);
       process.exit(1);
     }
-  })();
-} else {
-  program.parse();
+    return;
+  }
 
-  // If no command was provided, run interactive mode
-  if (!rawArgs.length) {
-    interactiveMode();
+  const action = actionFlags[0];
+
+  try {
+    switch (action) {
+      case 'switch': {
+        if (!opts.switch) {
+          throw new Error('Missing profile name for --switch');
+        }
+        await switchProfile(opts.switch);
+        console.log(`Switched to profile "${opts.switch}"`);
+        process.exit(0);
+        break;
+      }
+
+      case 'create': {
+        if (!opts.create) {
+          throw new Error('Missing profile name for --create');
+        }
+        await createProfile(opts.create);
+        console.log(`Created profile "${opts.create}"`);
+        process.exit(0);
+        break;
+      }
+
+      case 'delete': {
+        if (!opts.delete) {
+          throw new Error('Missing profile name for --delete');
+        }
+        await deleteProfile(opts.delete);
+        console.log(`Deleted profile "${opts.delete}"`);
+        process.exit(0);
+        break;
+      }
+
+      case 'rename': {
+        const renameArgs = opts.rename ?? [];
+        const renameTarget = opts.to;
+
+        if (!renameArgs.length && renameTarget) {
+          throw new Error('Missing old profile name for --rename');
+        }
+        if (!renameArgs.length) {
+          throw new Error('Missing profile name for --rename');
+        }
+        if (renameArgs.length > 2) {
+          throw new Error('Provide only two names for --rename');
+        }
+        if (renameArgs.length === 2 && renameTarget) {
+          throw new Error('Use either "--rename <old> <new>" or "--rename <old> --to <new>"');
+        }
+
+        const oldName = renameArgs[0];
+        const newName = renameArgs.length === 2 ? renameArgs[1] : renameTarget;
+
+        if (!newName) {
+          throw new Error('Missing new profile name for --rename');
+        }
+
+        await renameProfile(oldName, newName);
+        console.log(`Renamed profile "${oldName}" to "${newName}"`);
+        process.exit(0);
+        break;
+      }
+
+      case 'current': {
+        const activeStatus = await getActiveProfileStatus();
+        console.log(formatActiveProfileLine(activeStatus));
+        process.exit(0);
+        break;
+      }
+
+      case 'list': {
+        await showProfileList();
+        process.exit(0);
+        break;
+      }
+    }
+  } catch (error: any) {
+    console.error(`Error: ${error.message}`);
+    process.exit(1);
   }
 }
+
+void runCli();

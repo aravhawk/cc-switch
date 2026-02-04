@@ -24,12 +24,17 @@ Build a terminal-based CLI that manages multiple Claude Code profiles by copying
 - If any requirements file exists, keep it updated.
 
 ## CLI commands
-- `cc-switch` (no args): interactive menu (list, switch, create, delete, rename).
-- `cc-switch switch <name>`
-- `cc-switch create <name>`
-- `cc-switch delete <name>`
-- `cc-switch rename <old> <new>`
-- `cc-switch list`
+- `cc-switch` (no args): interactive menu (current, list, switch, create, delete, rename).
+- `cc-switch <name>`
+- `cc-switch --switch <name>`
+- `cc-switch --create <name>`
+- `cc-switch --delete <name>`
+- `cc-switch --rename <old> <new>`
+- `cc-switch --rename <old> --to <new>`
+- `cc-switch --list`
+- `cc-switch --current`
+- `cc-switch help`
+- `cc-switch version`
 
 ## Data layout
 - `~/.cc-switch/`
@@ -77,6 +82,7 @@ Build a terminal-based CLI that manages multiple Claude Code profiles by copying
 
 ## Validation rules
 - Profile name must be non-empty and must not contain `..`, `/`, `\`, or path separators.
+- Profile name must not be `help` or `version` (case-insensitive).
 - Optional: restrict to `[A-Za-z0-9-_]+` for safety and clarity.
 
 ## Missing settings behavior

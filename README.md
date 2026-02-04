@@ -34,18 +34,20 @@ This will present a menu with options to:
 
 ### Command Line Mode
 
+Actions use flags. Use a positional profile name for quick switching.
+
 #### Switch Profile
 
 ```bash
-cc-switch switch <profile-name>
+cc-switch <profile-name>
+```
+
+Or explicit:
+```bash
+cc-switch --switch <profile-name>
 ```
 
 Example:
-```bash
-cc-switch switch work
-```
-
-Shorthand:
 ```bash
 cc-switch work
 ```
@@ -55,12 +57,12 @@ cc-switch work
 Create a new profile from your current `~/.claude/settings.json`:
 
 ```bash
-cc-switch create <profile-name>
+cc-switch --create <profile-name>
 ```
 
 Example:
 ```bash
-cc-switch create personal
+cc-switch --create personal
 ```
 
 #### Delete Profile
@@ -68,12 +70,12 @@ cc-switch create personal
 Delete an existing profile (cannot delete the active profile):
 
 ```bash
-cc-switch delete <profile-name>
+cc-switch --delete <profile-name>
 ```
 
 Example:
 ```bash
-cc-switch delete old-config
+cc-switch --delete old-config
 ```
 
 #### Rename Profile
@@ -81,12 +83,17 @@ cc-switch delete old-config
 Rename an existing profile:
 
 ```bash
-cc-switch rename <old-name> <new-name>
+cc-switch --rename <old-name> <new-name>
+```
+
+Or:
+```bash
+cc-switch --rename <old-name> --to <new-name>
 ```
 
 Example:
 ```bash
-cc-switch rename work work-2024
+cc-switch --rename work work-2024
 ```
 
 #### List Profiles
@@ -94,7 +101,7 @@ cc-switch rename work work-2024
 List all available profiles:
 
 ```bash
-cc-switch list
+cc-switch --list
 ```
 
 #### Current Profile
@@ -102,8 +109,19 @@ cc-switch list
 Show the active profile:
 
 ```bash
-cc-switch current
+cc-switch --current
 ```
+
+#### Help and Version
+
+```bash
+cc-switch help
+cc-switch --help
+cc-switch version
+cc-switch --version
+```
+
+Reserved profile names: `help` and `version`.
 
 ## How It Works
 
@@ -166,6 +184,7 @@ Profile names must:
 - Not be empty
 - Only contain letters, numbers, hyphens, and underscores
 - Not contain path separators (`/`, `\`, `..`)
+- Not be reserved words (`help`, `version`)
 
 ## Error Handling
 
