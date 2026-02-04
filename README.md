@@ -25,6 +25,7 @@ cc-switch
 ```
 
 This will present a menu with options to:
+- Show the current profile
 - Switch between profiles
 - Create new profiles
 - Delete profiles
@@ -42,6 +43,11 @@ cc-switch switch <profile-name>
 Example:
 ```bash
 cc-switch switch work
+```
+
+Shorthand:
+```bash
+cc-switch work
 ```
 
 #### Create Profile
@@ -89,6 +95,14 @@ List all available profiles:
 
 ```bash
 cc-switch list
+```
+
+#### Current Profile
+
+Show the active profile:
+
+```bash
+cc-switch current
 ```
 
 ## How It Works

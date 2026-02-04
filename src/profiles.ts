@@ -3,7 +3,7 @@ import { dirname } from 'path';
 import { CLAUDE_SETTINGS, getProfileDir, getProfileSettings, PROFILES_DIR } from './paths.js';
 import { readState, updateState } from './state.js';
 import { validateProfileName } from './validation.js';
-import type { ProfileInfo } from './types.js';
+import type { ActiveProfileStatus, ProfileInfo } from './types.js';
 
 export async function checkClaudeSettings(): Promise<void> {
   try {
@@ -48,6 +48,12 @@ async function profileExists(profileName: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function getActiveProfileStatus(): Promise<ActiveProfileStatus> {
+  const state = await readState();
+  const exists = await profileExists(state.activeProfile);
+  return { name: state.activeProfile, exists };
 }
 
 async function mirrorSettings(profileName: string): Promise<void> {

@@ -1,8 +1,21 @@
 import { Command } from 'commander';
 import * as clack from '@clack/prompts';
-import { listProfiles, switchProfile, createProfile, deleteProfile, renameProfile } from './profiles.js';
+import {
+  listProfiles,
+  switchProfile,
+  createProfile,
+  deleteProfile,
+  renameProfile,
+  getActiveProfileStatus,
+} from './profiles.js';
+import type { ActiveProfileStatus } from './types.js';
 
 const program = new Command();
+
+function formatActiveProfileLine(status: ActiveProfileStatus): string {
+  const missingSuffix = status.exists ? '' : ' (missing)';
+  return `Current profile: "${status.name}"${missingSuffix}`;
+}
 
 program
   .name('cc-switch')
@@ -66,11 +79,28 @@ program
   });
 
 program
+  .command('current')
+  .description('Show the current active profile')
+  .action(async () => {
+    try {
+      const activeStatus = await getActiveProfileStatus();
+      console.log(formatActiveProfileLine(activeStatus));
+      process.exit(0);
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+program
   .command('list')
   .description('List all profiles')
   .action(async () => {
     try {
       const profiles = await listProfiles();
+      const activeStatus = await getActiveProfileStatus();
+
+      console.log(formatActiveProfileLine(activeStatus));
 
       if (profiles.length === 0) {
         console.log('No profiles found');
@@ -105,6 +135,7 @@ async function interactiveMode() {
     const action = await clack.select({
       message: 'What would you like to do?',
       options: [
+        { value: 'current', label: 'Show current profile' },
         { value: 'switch', label: 'Switch profile' },
         { value: 'create', label: 'Create new profile' },
         { value: 'delete', label: 'Delete profile' },
@@ -137,6 +168,12 @@ async function interactiveMode() {
 
         await switchProfile(selectedProfile as string);
         clack.outro(`Switched to profile "${selectedProfile}"`);
+        break;
+      }
+
+      case 'current': {
+        const activeStatus = await getActiveProfileStatus();
+        clack.outro(formatActiveProfileLine(activeStatus));
         break;
       }
 
@@ -240,6 +277,8 @@ async function interactiveMode() {
       }
 
       case 'list': {
+        const activeStatus = await getActiveProfileStatus();
+        console.log(formatActiveProfileLine(activeStatus));
         console.log('\nProfiles:');
         for (const profile of profiles) {
           const marker = profile.isActive ? ' (active)' : '';
@@ -260,7 +299,7 @@ async function interactiveMode() {
 
 // Parse arguments and determine mode
 const rawArgs = process.argv.slice(2);
-const knownCommands = new Set(['switch', 'create', 'delete', 'rename', 'list']);
+const knownCommands = new Set(['switch', 'create', 'delete', 'rename', 'list', 'current']);
 const firstArg = rawArgs[0];
 const isFlag = firstArg?.startsWith('-');
 

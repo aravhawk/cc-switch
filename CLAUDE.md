@@ -41,7 +41,7 @@ This is a TypeScript CLI tool that manages multiple Claude Code configuration pr
 
 The codebase follows a clear separation of concerns:
 
-- **index.ts**: CLI entry point that orchestrates command parsing (commander) and interactive UI (@clack/prompts). Routes commands to profile operations and supports `cc-switch <profile>` as a shorthand for `switch`.
+- **index.ts**: CLI entry point that orchestrates command parsing (commander) and interactive UI (@clack/prompts). Routes commands to profile operations, supports `cc-switch <profile>` as a shorthand for `switch`, and exposes `current` to show the active profile.
 - **profiles.ts**: Core business logic for all profile operations (switch, create, delete, rename, list). Each operation enforces validation rules and uses atomic file operations.
 - **state.ts**: Manages the global state file (`~/.cc-switch/state.json`) that tracks which profile is currently active. Provides read/write/update functions with atomic writes.
 - **paths.ts**: Centralized path construction for all filesystem locations. Single source of truth for `~/.claude/settings.json` and `~/.cc-switch/` paths.
@@ -120,6 +120,9 @@ node dist/index.js create test-profile
 
 # List profiles (should show test-profile)
 node dist/index.js list
+
+# Show current profile
+node dist/index.js current
 
 # Switch to it
 node dist/index.js switch test-profile

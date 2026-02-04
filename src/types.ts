@@ -7,3 +7,8 @@ export interface ProfileInfo {
   name: string;
   isActive: boolean;
 }
+
+export interface ActiveProfileStatus {
+  name: string;
+  exists: boolean;
+}
