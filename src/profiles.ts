@@ -175,6 +175,11 @@ export async function renameProfile(oldName: string, newName: string): Promise<v
     throw new Error(`Profile "${oldName}" does not exist`);
   }
 
+  // No-op if names are identical
+  if (oldName === newName) {
+    return;
+  }
+
   // Check if new profile already exists
   if (await profileExists(newName)) {
     throw new Error(`Profile "${newName}" already exists`);

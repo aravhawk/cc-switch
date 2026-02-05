@@ -221,6 +221,11 @@ async function interactiveMode() {
           process.exit(0);
         }
 
+        if (oldName === newName) {
+          clack.outro('Profile name unchanged');
+          process.exit(0);
+        }
+
         await renameProfile(oldName as string, newName as string);
         clack.outro(`Renamed profile "${oldName}" to "${newName}"`);
         break;
@@ -366,6 +371,13 @@ async function runCli(): Promise<void> {
 
         if (!newName) {
           throw new Error('Missing new profile name for --rename');
+        }
+
+        if (oldName === newName) {
+          await renameProfile(oldName, newName);
+          console.log('Profile name unchanged');
+          process.exit(0);
+          break;
         }
 
         await renameProfile(oldName, newName);

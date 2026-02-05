@@ -107,6 +107,9 @@ No ~/.claude/settings.json found. Run Claude Code once to generate it, or run th
 ### Active Profile Protection
 Cannot delete the active profile. Users must switch to another profile first. This prevents accidentally deleting their current working configuration.
 
+### Rename Behavior
+Renaming a profile to the same name is a no-op. The CLI should exit successfully and report that the profile name is unchanged.
+
 ## Testing Locally
 
 Since there are no automated tests, manually verify changes:
