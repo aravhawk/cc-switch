@@ -8,9 +8,11 @@ import {
   deleteProfile,
   renameProfile,
   getActiveProfileStatus,
+  getProviderTemplates,
+  resolveTemplateName,
 } from './profiles.js';
 import { validateProfileName } from './validation.js';
-import type { ActiveProfileStatus } from './types.js';
+import type { ActiveProfileStatus, ProviderTemplateName } from './types.js';
 
 const require = createRequire(import.meta.url);
 
@@ -40,6 +42,59 @@ function getProfileValidationMessage(value?: string): string | undefined {
     return validation.error ?? 'Profile name is invalid';
   }
   return undefined;
+}
+
+async function promptForTemplateSelection(): Promise<{
+  template?: ProviderTemplateName;
+  apiKey?: string;
+}> {
+  const templates = getProviderTemplates();
+  const selection = await clack.select({
+    message: 'Choose a provider template (optional):',
+    options: [
+      { value: 'none', label: 'None (copy current settings)' },
+      ...templates.map(template => ({
+        value: template.name,
+        label: template.label,
+      })),
+    ],
+  });
+
+  if (clack.isCancel(selection)) {
+    clack.cancel('Operation cancelled');
+    process.exit(0);
+  }
+
+  if (selection === 'none') {
+    return {};
+  }
+
+  const chosenTemplate = selection as ProviderTemplateName;
+  const meta = templates.find(template => template.name === chosenTemplate);
+  if (!meta) {
+    throw new Error('Selected template is not available');
+  }
+
+  if (!meta.requiresApiKey) {
+    return { template: chosenTemplate };
+  }
+
+  const apiKey = await clack.password({
+    message: `Enter API key for ${meta.label}:`,
+    validate: (value) => {
+      if (!value || !String(value).trim()) {
+        return 'API key cannot be empty';
+      }
+      return undefined;
+    },
+  });
+
+  if (clack.isCancel(apiKey)) {
+    clack.cancel('Operation cancelled');
+    process.exit(0);
+  }
+
+  return { template: chosenTemplate, apiKey: apiKey as string };
 }
 
 async function showProfileList(
@@ -74,7 +129,9 @@ program
   .option('--rename <names...>', 'Rename a profile')
   .option('--to <name>', 'New name for rename')
   .option('--current', 'Show the current active profile')
-  .option('--list', 'List all profiles');
+  .option('--list', 'List all profiles')
+  .option('--template <provider>', 'Create profile using a provider template')
+  .option('--api-key <key>', 'API key for the provider template');
 
 // Interactive mode (no args)
 async function interactiveMode() {
@@ -146,8 +203,13 @@ async function interactiveMode() {
           process.exit(0);
         }
 
-        await createProfile(profileName as string);
-        clack.outro(`Created profile "${profileName}"`);
+        const templateSelection = await promptForTemplateSelection();
+
+        await createProfile(profileName as string, templateSelection);
+        const templateSuffix = templateSelection.template
+          ? ` with template "${templateSelection.template}"`
+          : '';
+        clack.outro(`Created profile "${profileName}"${templateSuffix}`);
         break;
       }
 
@@ -275,7 +337,14 @@ async function runCli(): Promise<void> {
     to?: string;
     current?: boolean;
     list?: boolean;
+    template?: string;
+    apiKey?: string;
   }>();
+
+  const resolvedTemplate = opts.template ? resolveTemplateName(opts.template) : undefined;
+  const templateMeta = resolvedTemplate
+    ? getProviderTemplates().find(template => template.name === resolvedTemplate)
+    : undefined;
 
   const profileArg = program.args[0] as string | undefined;
   const actionFlags: string[] = [];
@@ -286,6 +355,26 @@ async function runCli(): Promise<void> {
   if (opts.rename || opts.to) actionFlags.push('rename');
   if (opts.current) actionFlags.push('current');
   if (opts.list) actionFlags.push('list');
+
+  if (opts.template && !opts.create) {
+    console.error('Error: --template can only be used with --create.');
+    process.exit(1);
+  }
+
+  if (opts.apiKey && !opts.template) {
+    console.error('Error: --api-key can only be used with --template.');
+    process.exit(1);
+  }
+
+  if (opts.template && !resolvedTemplate) {
+    console.error(`Error: Unknown template "${opts.template}".`);
+    process.exit(1);
+  }
+
+  if (templateMeta?.requiresApiKey && !opts.apiKey) {
+    console.error(`Error: API key is required for template "${templateMeta.label}".`);
+    process.exit(1);
+  }
 
   if (actionFlags.length > 1) {
     console.error('Error: Please provide only one action flag at a time.');
@@ -333,8 +422,12 @@ async function runCli(): Promise<void> {
         if (!opts.create) {
           throw new Error('Missing profile name for --create');
         }
-        await createProfile(opts.create);
-        console.log(`Created profile "${opts.create}"`);
+        await createProfile(opts.create, {
+          template: resolvedTemplate,
+          apiKey: opts.apiKey,
+        });
+        const templateSuffix = resolvedTemplate ? ` with template "${resolvedTemplate}"` : '';
+        console.log(`Created profile "${opts.create}"${templateSuffix}`);
         process.exit(0);
         break;
       }
