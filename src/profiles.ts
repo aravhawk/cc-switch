@@ -66,9 +66,6 @@ async function mirrorSettings(profileName: string): Promise<void> {
   const tempFile = `${profileSettings}.tmp`;
   await writeFile(tempFile, currentSettings, 'utf-8');
   await fsRename(tempFile, profileSettings);
-
-  // Make the newly created profile active
-  await updateState({ activeProfile: profileName });
 }
 
 export async function switchProfile(targetProfile: string): Promise<void> {
@@ -136,6 +133,9 @@ export async function createProfile(profileName: string): Promise<void> {
   const tempFile = `${profileSettings}.tmp`;
   await writeFile(tempFile, currentSettings, 'utf-8');
   await fsRename(tempFile, profileSettings);
+
+  // Make the newly created profile active
+  await updateState({ activeProfile: profileName });
 }
 
 export async function deleteProfile(profileName: string): Promise<void> {
