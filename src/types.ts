@@ -12,3 +12,10 @@ export interface ActiveProfileStatus {
   name: string;
   exists: boolean;
 }
+
+export type ProviderTemplateName = 'anthropic' | 'moonshot' | 'zai' | 'minimax';
+
+export interface CreateProfileOptions {
+  template?: ProviderTemplateName;
+  apiKey?: string;
+}

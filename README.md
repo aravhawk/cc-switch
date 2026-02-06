@@ -67,6 +67,22 @@ cc-switch --create personal
 
 New profiles are activated immediately after creation.
 
+#### Create From Provider Template
+
+Create and apply provider defaults in one step (prompts for API key if omitted):
+
+```bash
+cc-switch --create <profile-name> --template moonshot --api-key <your-key>
+```
+
+Available templates:
+- anthropic (claude) – no API key needed; leaves defaults in place
+- moonshot (kimi)
+- zai (glm)
+- minimax
+
+Templates set `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, and default Haiku/Sonnet/Opus models, and remove any existing `ANTHROPIC_API_KEY`.
+
 #### Delete Profile
 
 Delete an existing profile (cannot delete the active profile):
