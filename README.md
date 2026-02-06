@@ -65,6 +65,8 @@ Example:
 cc-switch --create personal
 ```
 
+New profiles are activated immediately after creation.
+
 #### Delete Profile
 
 Delete an existing profile (cannot delete the active profile):
