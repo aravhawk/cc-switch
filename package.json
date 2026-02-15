@@ -1,6 +1,6 @@
 {
   "name": "@aravhawk/cc-switch",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Profile manager for Claude Code settings",
   "type": "module",
   "bin": {
