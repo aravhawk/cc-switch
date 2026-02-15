@@ -53,9 +53,9 @@ const PROVIDER_TEMPLATES: ProviderTemplateConfig[] = [
     label: 'MiniMax',
     requiresApiKey: true,
     baseUrl: 'https://api.minimax.io/anthropic',
-    haikuModel: 'MiniMax-M2.1',
-    sonnetModel: 'MiniMax-M2.1',
-    opusModel: 'MiniMax-M2.1',
+    haikuModel: 'MiniMax-M2.5',
+    sonnetModel: 'MiniMax-M2.5',
+    opusModel: 'MiniMax-M2.5',
   },
 ];
 
