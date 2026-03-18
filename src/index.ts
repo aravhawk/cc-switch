@@ -11,8 +11,11 @@ import {
   getProviderTemplates,
   resolveTemplateName,
 } from './profiles.js';
+import { AVAILABLE_MANAGED_PATHS, DEFAULT_MANAGED_PATHS } from './paths.js';
 import { validateProfileName } from './validation.js';
 import type { ActiveProfileStatus, ProviderTemplateName } from './types.js';
+
+const VALID_MANAGED_PATH_NAMES: string[] = AVAILABLE_MANAGED_PATHS.map(p => p.name);
 
 const require = createRequire(import.meta.url);
 
@@ -112,8 +115,11 @@ async function showProfileList(
 
   console.log('\nProfiles:');
   for (const profile of resolvedProfiles) {
-    const marker = profile.isActive ? ' (active)' : '';
-    console.log(`  ${profile.name}${marker}`);
+    const markers: string[] = [];
+    if (profile.isActive) markers.push('active');
+    if (profile.type === 'full') markers.push('full');
+    const suffix = markers.length > 0 ? ` (${markers.join(', ')})` : '';
+    console.log(`  ${profile.name}${suffix}`);
   }
   console.log();
 }
@@ -131,7 +137,9 @@ program
   .option('--current', 'Show the current active profile')
   .option('--list', 'List all profiles')
   .option('--template <provider>', 'Create profile using a provider template')
-  .option('--api-key <key>', 'API key for the provider template');
+  .option('--api-key <key>', 'API key for the provider template')
+  .option('--full', 'Create a full profile (settings, instructions, agents, skills)')
+  .option('--include <paths>', 'Comma-separated paths to include in full profile (default: CLAUDE.md,agents,skills)');
 
 // Interactive mode (no args)
 async function interactiveMode() {
@@ -164,10 +172,13 @@ async function interactiveMode() {
 
     switch (action) {
       case 'switch': {
-        const profileChoices = profiles.map(p => ({
-          value: p.name,
-          label: p.isActive ? `${p.name} (active)` : p.name,
-        }));
+        const profileChoices = profiles.map(p => {
+          const markers: string[] = [];
+          if (p.isActive) markers.push('active');
+          if (p.type === 'full') markers.push('full');
+          const suffix = markers.length > 0 ? ` (${markers.join(', ')})` : '';
+          return { value: p.name, label: `${p.name}${suffix}` };
+        });
 
         const selectedProfile = await clack.select({
           message: 'Select profile to switch to:',
@@ -203,13 +214,52 @@ async function interactiveMode() {
           process.exit(0);
         }
 
+        const profileType = await clack.select({
+          message: 'Profile type:',
+          options: [
+            { value: 'settings', label: 'Settings only (swap settings.json)' },
+            { value: 'full', label: 'Full (swap settings, instructions, agents, skills)' },
+          ],
+        });
+
+        if (clack.isCancel(profileType)) {
+          clack.cancel('Operation cancelled');
+          process.exit(0);
+        }
+
+        const isFull = profileType === 'full';
+        let selectedManagedPaths: string[] = [];
+
+        if (isFull) {
+          const pathSelection = await clack.multiselect({
+            message: 'Which paths to include in this profile?',
+            options: AVAILABLE_MANAGED_PATHS.map(p => ({
+              value: p.name,
+              label: p.label,
+            })),
+            initialValues: [...DEFAULT_MANAGED_PATHS],
+          });
+
+          if (clack.isCancel(pathSelection)) {
+            clack.cancel('Operation cancelled');
+            process.exit(0);
+          }
+
+          selectedManagedPaths = pathSelection as string[];
+        }
+
         const templateSelection = await promptForTemplateSelection();
 
-        await createProfile(profileName as string, templateSelection);
+        await createProfile(profileName as string, {
+          ...templateSelection,
+          full: isFull,
+          managedPaths: isFull ? selectedManagedPaths : undefined,
+        });
         const templateSuffix = templateSelection.template
           ? ` with template "${templateSelection.template}"`
           : '';
-        clack.outro(`Created profile "${profileName}"${templateSuffix}`);
+        const fullSuffix = isFull ? ' (full profile)' : '';
+        clack.outro(`Created profile "${profileName}"${templateSuffix}${fullSuffix}`);
         break;
       }
 
@@ -339,6 +389,8 @@ async function runCli(): Promise<void> {
     list?: boolean;
     template?: string;
     apiKey?: string;
+    full?: boolean;
+    include?: string;
   }>();
 
   const resolvedTemplate = opts.template ? resolveTemplateName(opts.template) : undefined;
@@ -374,6 +426,37 @@ async function runCli(): Promise<void> {
   if (templateMeta?.requiresApiKey && !opts.apiKey) {
     console.error(`Error: API key is required for template "${templateMeta.label}".`);
     process.exit(1);
+  }
+
+  if (opts.full && !opts.create) {
+    console.error('Error: --full can only be used with --create.');
+    process.exit(1);
+  }
+
+  if (opts.include && !opts.full) {
+    console.error('Error: --include can only be used with --full.');
+    process.exit(1);
+  }
+
+  // Parse and validate --include paths
+  let parsedManagedPaths: string[] | undefined;
+  if (opts.full) {
+    if (opts.include) {
+      parsedManagedPaths = opts.include.split(',').map(s => s.trim()).filter(Boolean);
+      if (parsedManagedPaths.length === 0) {
+        console.error('Error: --include must specify at least one valid path.');
+        console.error(`Valid paths: ${VALID_MANAGED_PATH_NAMES.join(', ')}`);
+        process.exit(1);
+      }
+      const invalid = parsedManagedPaths.filter(p => !VALID_MANAGED_PATH_NAMES.includes(p));
+      if (invalid.length > 0) {
+        console.error(`Error: Invalid managed path(s): ${invalid.join(', ')}`);
+        console.error(`Valid paths: ${VALID_MANAGED_PATH_NAMES.join(', ')}`);
+        process.exit(1);
+      }
+    } else {
+      parsedManagedPaths = [...DEFAULT_MANAGED_PATHS];
+    }
   }
 
   if (actionFlags.length > 1) {
@@ -425,9 +508,12 @@ async function runCli(): Promise<void> {
         await createProfile(opts.create, {
           template: resolvedTemplate,
           apiKey: opts.apiKey,
+          full: opts.full,
+          managedPaths: parsedManagedPaths,
         });
         const templateSuffix = resolvedTemplate ? ` with template "${resolvedTemplate}"` : '';
-        console.log(`Created profile "${opts.create}"${templateSuffix}`);
+        const fullSuffix = opts.full ? ' (full profile)' : '';
+        console.log(`Created profile "${opts.create}"${templateSuffix}${fullSuffix}`);
         process.exit(0);
         break;
       }

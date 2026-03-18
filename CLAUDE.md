@@ -35,7 +35,9 @@ pnpm release:major
 
 ## Architecture Overview
 
-This is a TypeScript CLI tool that manages multiple Claude Code configuration profiles by swapping `~/.claude/settings.json` files.
+This is a TypeScript CLI tool that manages multiple Claude Code configuration profiles. It supports two profile types:
+- **Settings-only profiles**: Swap only `~/.claude/settings.json` (the default)
+- **Full profiles**: Swap settings.json plus user-selected paths (CLAUDE.md, agents/, skills/, plugins/, teams/) for complete per-provider environments
 
 ### Module Structure
 
@@ -44,34 +46,41 @@ The codebase follows a clear separation of concerns:
 - **index.ts**: CLI entry point that orchestrates command parsing (commander) and interactive UI (@clack/prompts). Uses long flags for actions (create/delete/rename/current/list/switch), supports `cc-switch <profile>` as the shorthand switch, and reserves `help` and `version`.
 - **profiles.ts**: Core business logic for all profile operations (switch, create, delete, rename, list). Each operation enforces validation rules and uses atomic file operations.
 - **state.ts**: Manages the global state file (`~/.cc-switch/state.json`) that tracks which profile is currently active. Provides read/write/update functions with atomic writes.
-- **paths.ts**: Centralized path construction for all filesystem locations. Single source of truth for `~/.claude/settings.json` and `~/.cc-switch/` paths.
+- **paths.ts**: Centralized path construction for all filesystem locations. Single source of truth for `~/.claude/settings.json`, `~/.cc-switch/` paths, and the `AVAILABLE_MANAGED_PATHS` / `DEFAULT_MANAGED_PATHS` constants that define which `~/.claude` paths can be included in full profiles.
 - **validation.ts**: Profile name validation logic. Enforces security rules to prevent path traversal attacks.
-- **types.ts**: TypeScript interfaces for State and ProfileInfo.
+- **types.ts**: TypeScript interfaces for State, ProfileInfo, ProfileMeta, ProfileType, etc.
 
 ### Critical Workflow: Profile Switching
 
 The switch operation has a specific order of operations that must be preserved:
 
-1. **Mirror-then-replace**: Always save the current active profile's settings BEFORE loading the target profile
-2. **Atomic writes**: Use temp file + rename pattern to prevent corruption
-3. **State update**: Only update state.json after all file operations succeed
+1. **Mirror-then-replace**: Always save the current active profile's state BEFORE loading the target profile. For full profiles, this includes mirroring managed paths (CLAUDE.md, agents/, skills/, etc.) in addition to settings.json.
+2. **Atomic writes**: Use temp file + rename pattern to prevent corruption (for single files; directory copies use `fs.cp` with `verbatimSymlinks: true`)
+3. **Load target**: After mirroring, load target's settings.json. If target is a full profile, also load its managed paths into `~/.claude`.
+4. **State update**: Only update state.json after all file operations succeed
 
 This design ensures users never lose their current settings, even if the switch operation is interrupted.
 
 ### Data Layout
 
 User data is stored outside this repository at:
-- `~/.cc-switch/profiles/<name>/settings.json` - Per-profile Claude settings
+- `~/.cc-switch/profiles/<name>/settings.json` - Per-profile Claude settings (always present)
+- `~/.cc-switch/profiles/<name>/profile.json` - Profile metadata for full profiles (`{"type":"full","version":1,"managedPaths":[...]}`)
+- `~/.cc-switch/profiles/<name>/CLAUDE.md` - Full profiles only, if in managedPaths
+- `~/.cc-switch/profiles/<name>/agents/` - Full profiles only, if in managedPaths
+- `~/.cc-switch/profiles/<name>/skills/` - Full profiles only, if in managedPaths
+- `~/.cc-switch/profiles/<name>/plugins/` - Full profiles only, if in managedPaths
+- `~/.cc-switch/profiles/<name>/teams/` - Full profiles only, if in managedPaths
 - `~/.cc-switch/state.json` - Active profile tracker
 
-The tool operates on `~/.claude/settings.json` (Claude Code's live config).
+The tool operates on `~/.claude/settings.json` (Claude Code's live config) and, for full profiles, also on `~/.claude/CLAUDE.md`, `~/.claude/agents/`, `~/.claude/skills/`, etc.
 
 ## Build System
 
 Uses `tsup` to compile TypeScript to ESM format:
 - **Entry**: `src/index.ts`
 - **Output**: `dist/index.js` (with shebang for CLI execution)
-- **Target**: Node 18+
+- **Target**: Node 20.7+
 - **Format**: ESM only (note the `.js` extensions in imports)
 
 The shebang (`#!/usr/bin/env node`) is added by tsup config, NOT in source files. Source file `index.ts` should not contain a shebang.
@@ -82,7 +91,7 @@ The shebang (`#!/usr/bin/env node`) is added by tsup config, NOT in source files
 - **No GUI**: Terminal-only interface
 - **No cloud sync**: Local filesystem only
 - **Package manager**: Use `pnpm` exclusively
-- **Node version**: Requires Node 18+
+- **Node version**: Requires Node 20.7+ (for `fs.cp` `verbatimSymlinks` support)
 - **No non-ASCII**: Avoid emojis and special characters in code/output
 
 ## Key Implementation Rules
@@ -118,17 +127,24 @@ Since there are no automated tests, manually verify changes:
 # Build first
 pnpm build
 
-# Create test profile
+# Create settings-only profile
 node dist/index.js --create test-profile
 
-# List profiles (should show test-profile)
+# Create full profile (default managed paths: CLAUDE.md, agents, skills)
+node dist/index.js --create test-full --full
+
+# Create full profile with custom paths
+node dist/index.js --create test-custom --full --include CLAUDE.md,skills
+
+# List profiles (should show type markers)
 node dist/index.js --list
 
 # Show current profile
 node dist/index.js --current
 
-# Switch to it
+# Switch between profiles
 node dist/index.js --switch test-profile
+node dist/index.js --switch test-full
 
 # Shorthand switch
 node dist/index.js test-profile
@@ -140,8 +156,10 @@ node dist/index.js --rename test-profile renamed
 node dist/index.js --create another
 node dist/index.js --switch another
 
-# Delete the renamed one
+# Delete profiles
 node dist/index.js --delete renamed
+node dist/index.js --delete test-full
+node dist/index.js --delete test-custom
 
 # Clean up
 rm -rf ~/.cc-switch

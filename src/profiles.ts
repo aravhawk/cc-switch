@@ -1,12 +1,22 @@
-import { readFile, writeFile, mkdir, rm, readdir, rename as fsRename, access } from 'fs/promises';
+import { readFile, writeFile, mkdir, rm, readdir, rename as fsRename, access, cp, copyFile, stat as fsStat } from 'fs/promises';
 import { dirname } from 'path';
-import { CLAUDE_SETTINGS, getProfileDir, getProfileSettings, PROFILES_DIR } from './paths.js';
+import {
+  CLAUDE_SETTINGS,
+  AVAILABLE_MANAGED_PATHS,
+  getProfileDir,
+  getProfileSettings,
+  getProfileMetaPath,
+  getProfileManagedPath,
+  PROFILES_DIR,
+} from './paths.js';
 import { readState, updateState } from './state.js';
 import { validateProfileName } from './validation.js';
 import type {
   ActiveProfileStatus,
   CreateProfileOptions,
   ProfileInfo,
+  ProfileMeta,
+  ProfileType,
   ProviderTemplateName,
 } from './types.js';
 
@@ -71,6 +81,84 @@ function getTemplateConfig(name: ProviderTemplateName): ProviderTemplateConfig |
   return PROVIDER_TEMPLATES.find(template => template.name === name);
 }
 
+// --- Profile type / meta ---
+
+export async function getProfileType(profileName: string): Promise<ProfileType> {
+  const meta = await readProfileMeta(profileName);
+  return meta?.type === 'full' ? 'full' : 'settings';
+}
+
+async function readProfileMeta(profileName: string): Promise<ProfileMeta | null> {
+  let data: string;
+  try {
+    data = await readFile(getProfileMetaPath(profileName), 'utf-8');
+  } catch (e: any) {
+    if (e.code === 'ENOENT') return null;
+    throw e;
+  }
+  try {
+    return JSON.parse(data) as ProfileMeta;
+  } catch {
+    throw new Error(`Profile metadata for "${profileName}" is corrupt (profile.json). Delete and recreate the profile.`);
+  }
+}
+
+async function writeProfileMeta(profileName: string, type: ProfileType, managedPaths: string[]): Promise<void> {
+  const metaPath = getProfileMetaPath(profileName);
+  const meta: ProfileMeta = { type, version: 1, managedPaths };
+  const tempFile = `${metaPath}.tmp`;
+  await writeFile(tempFile, JSON.stringify(meta, null, 2), 'utf-8');
+  await fsRename(tempFile, metaPath);
+}
+
+// --- Managed path sync ---
+
+async function syncManagedPath(source: string, dest: string): Promise<void> {
+  // Check if source exists before touching dest
+  let sourceStat;
+  try {
+    sourceStat = await fsStat(source);
+  } catch (e: any) {
+    if (e.code === 'ENOENT') return; // Source gone — leave dest alone
+    throw e;
+  }
+
+  // Source exists, safe to replace dest
+  await rm(dest, { recursive: true, force: true });
+
+  if (sourceStat.isDirectory()) {
+    await cp(source, dest, { recursive: true, verbatimSymlinks: true });
+  } else {
+    await mkdir(dirname(dest), { recursive: true });
+    await copyFile(source, dest);
+  }
+}
+
+function resolveManagedClaudePath(managedName: string): string | undefined {
+  const entry = AVAILABLE_MANAGED_PATHS.find(p => p.name === managedName);
+  return entry?.claudePath;
+}
+
+async function mirrorFullProfile(profileName: string, managedPaths: string[]): Promise<void> {
+  for (const name of managedPaths) {
+    const claudePath = resolveManagedClaudePath(name);
+    if (!claudePath) continue;
+    const destPath = getProfileManagedPath(profileName, name);
+    await syncManagedPath(claudePath, destPath);
+  }
+}
+
+async function loadFullProfile(profileName: string, managedPaths: string[]): Promise<void> {
+  for (const name of managedPaths) {
+    const claudePath = resolveManagedClaudePath(name);
+    if (!claudePath) continue;
+    const sourcePath = getProfileManagedPath(profileName, name);
+    await syncManagedPath(sourcePath, claudePath);
+  }
+}
+
+// --- Provider templates ---
+
 export function getProviderTemplates(): Array<{
   name: ProviderTemplateName;
   label: string;
@@ -106,12 +194,17 @@ export async function listProfiles(): Promise<ProfileInfo[]> {
   try {
     await mkdir(PROFILES_DIR, { recursive: true });
     const entries = await readdir(PROFILES_DIR, { withFileTypes: true });
-    const profiles = entries
-      .filter(entry => entry.isDirectory())
-      .map(entry => ({
+    const profiles: ProfileInfo[] = [];
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const type = await getProfileType(entry.name);
+      profiles.push({
         name: entry.name,
         isActive: entry.name === state.activeProfile,
-      }));
+        type,
+      });
+    }
 
     return profiles.sort((a, b) => {
       if (a.isActive) return -1;
@@ -174,16 +267,22 @@ function applyTemplateOverrides(
   return JSON.stringify(parsed, null, 2);
 }
 
-async function mirrorSettings(profileName: string): Promise<void> {
+async function mirrorActiveProfile(profileName: string): Promise<void> {
   const profileSettings = getProfileSettings(profileName);
   await mkdir(dirname(profileSettings), { recursive: true });
 
   const currentSettings = await readFile(CLAUDE_SETTINGS, 'utf-8');
 
-  // Atomic write
+  // Atomic write for settings.json
   const tempFile = `${profileSettings}.tmp`;
   await writeFile(tempFile, currentSettings, 'utf-8');
   await fsRename(tempFile, profileSettings);
+
+  // If full profile, also mirror managed paths
+  const meta = await readProfileMeta(profileName);
+  if (meta?.type === 'full' && meta.managedPaths.length > 0) {
+    await mirrorFullProfile(profileName, meta.managedPaths);
+  }
 }
 
 export async function switchProfile(targetProfile: string): Promise<void> {
@@ -205,13 +304,13 @@ export async function switchProfile(targetProfile: string): Promise<void> {
   const state = await readState();
   const activeProfile = state.activeProfile;
 
-  // Mirror current settings to active profile before switching
-  await mirrorSettings(activeProfile);
-
-  // If target equals active, exit early
+  // Exit early before any I/O
   if (targetProfile === activeProfile) {
     throw new Error(`Profile "${targetProfile}" is already active`);
   }
+
+  // Mirror current active profile (settings + managed paths if full)
+  await mirrorActiveProfile(activeProfile);
 
   // Replace settings with target profile's settings
   const targetSettings = getProfileSettings(targetProfile);
@@ -221,6 +320,21 @@ export async function switchProfile(targetProfile: string): Promise<void> {
   const tempFile = `${CLAUDE_SETTINGS}.tmp`;
   await writeFile(tempFile, newSettings, 'utf-8');
   await fsRename(tempFile, CLAUDE_SETTINGS);
+
+  // Handle managed paths based on profile types
+  const activeMeta = await readProfileMeta(activeProfile);
+  const targetMeta = await readProfileMeta(targetProfile);
+
+  if (targetMeta?.type === 'full' && targetMeta.managedPaths.length > 0) {
+    // Target is full — load its managed paths
+    await loadFullProfile(targetProfile, targetMeta.managedPaths);
+  } else if (activeMeta?.type === 'full' && activeMeta.managedPaths.length > 0) {
+    // Switching from full to settings-only — clean up managed paths from ~/.claude
+    for (const name of activeMeta.managedPaths) {
+      const claudePath = resolveManagedClaudePath(name);
+      if (claudePath) await rm(claudePath, { recursive: true, force: true });
+    }
+  }
 
   // Update state
   await updateState({ activeProfile: targetProfile });
@@ -273,7 +387,7 @@ export async function createProfile(
   let settingsToWrite = currentSettings;
 
   if (templateConfig) {
-    await mirrorSettings(activeProfileForTemplate ?? 'default');
+    await mirrorActiveProfile(activeProfileForTemplate ?? 'default');
     settingsToWrite = applyTemplateOverrides(currentSettings, templateConfig, apiKey);
   }
 
@@ -286,6 +400,13 @@ export async function createProfile(
     const tempCurrentSettings = `${CLAUDE_SETTINGS}.tmp`;
     await writeFile(tempCurrentSettings, settingsToWrite, 'utf-8');
     await fsRename(tempCurrentSettings, CLAUDE_SETTINGS);
+  }
+
+  // If full profile, write meta and copy managed paths from ~/.claude
+  if (options?.full) {
+    const managedPaths = options.managedPaths ?? [];
+    await writeProfileMeta(profileName, 'full', managedPaths);
+    await mirrorFullProfile(profileName, managedPaths);
   }
 
   // Make the newly created profile active
