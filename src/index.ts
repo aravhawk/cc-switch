@@ -148,21 +148,29 @@ async function interactiveMode() {
   try {
     const profiles = await listProfiles();
 
-    if (profiles.length === 0) {
-      clack.outro('No profiles found. Create one with: cc-switch --create <name>');
-      process.exit(0);
+    const hasProfiles = profiles.length > 0;
+
+    const menuOptions = hasProfiles
+      ? [
+          { value: 'current', label: 'Show current profile' },
+          { value: 'switch', label: 'Switch profile' },
+          { value: 'create', label: 'Create new profile' },
+          { value: 'delete', label: 'Delete profile' },
+          { value: 'rename', label: 'Rename profile' },
+          { value: 'list', label: 'List profiles' },
+        ]
+      : [
+          { value: 'create', label: 'Create your first profile' },
+          { value: 'current', label: 'Show current profile' },
+        ];
+
+    if (!hasProfiles) {
+      clack.log.info('No profiles found yet. Create one to get started.');
     }
 
     const action = await clack.select({
       message: 'What would you like to do?',
-      options: [
-        { value: 'current', label: 'Show current profile' },
-        { value: 'switch', label: 'Switch profile' },
-        { value: 'create', label: 'Create new profile' },
-        { value: 'delete', label: 'Delete profile' },
-        { value: 'rename', label: 'Rename profile' },
-        { value: 'list', label: 'List profiles' },
-      ],
+      options: menuOptions,
     });
 
     if (clack.isCancel(action)) {
