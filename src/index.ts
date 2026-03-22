@@ -117,8 +117,8 @@ async function showProfileList(
   for (const profile of resolvedProfiles) {
     const markers: string[] = [];
     if (profile.isActive) markers.push('active');
-    if (profile.type === 'full') markers.push('full');
-    const suffix = markers.length > 0 ? ` (${markers.join(', ')})` : '';
+    markers.push(profile.type === 'full' ? 'full' : 'settings');
+    const suffix = ` (${markers.join(', ')})`;
     console.log(`  ${profile.name}${suffix}`);
   }
   console.log();
