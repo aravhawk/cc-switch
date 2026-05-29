@@ -67,6 +67,16 @@ const PROVIDER_TEMPLATES: ProviderTemplateConfig[] = [
     sonnetModel: 'MiniMax-M2.7',
     opusModel: 'MiniMax-M2.7',
   },
+  {
+    name: 'mimo',
+    label: 'Xiaomi MiMo',
+    requiresApiKey: true,
+    baseUrl: 'https://token-plan-cn.xiaomimimo.com/anthropic',
+    haikuModel: 'mimo-v2.5-pro',
+    sonnetModel: 'mimo-v2.5-pro',
+    opusModel: 'mimo-v2.5-pro',
+    aliases: ['xiaomi'],
+  },
 ];
 
 const TEMPLATE_ALIASES = new Map<string, ProviderTemplateName>();
@@ -255,12 +265,15 @@ function applyTemplateOverrides(
 
   if (template.haikuModel) {
     env.ANTHROPIC_DEFAULT_HAIKU_MODEL = template.haikuModel;
+    env.ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME = template.haikuModel;
   }
   if (template.sonnetModel) {
     env.ANTHROPIC_DEFAULT_SONNET_MODEL = template.sonnetModel;
+    env.ANTHROPIC_DEFAULT_SONNET_MODEL_NAME = template.sonnetModel;
   }
   if (template.opusModel) {
     env.ANTHROPIC_DEFAULT_OPUS_MODEL = template.opusModel;
+    env.ANTHROPIC_DEFAULT_OPUS_MODEL_NAME = template.opusModel;
   }
 
   parsed.env = env;

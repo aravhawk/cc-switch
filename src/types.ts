@@ -22,7 +22,7 @@ export interface ActiveProfileStatus {
   exists: boolean;
 }
 
-export type ProviderTemplateName = 'anthropic' | 'moonshot' | 'zai' | 'minimax';
+export type ProviderTemplateName = 'anthropic' | 'moonshot' | 'zai' | 'minimax' | 'mimo';
 
 export interface CreateProfileOptions {
   template?: ProviderTemplateName;
