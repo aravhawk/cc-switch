@@ -15,9 +15,9 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "release:patch": "pnpm version patch && git push --follow-tags",
-    "release:minor": "pnpm version minor && git push --follow-tags",
-    "release:major": "pnpm version major && git push --follow-tags"
+    "release:patch": "pnpm version patch && git push --follow-tags && gh release create \"$(git describe --tags --abbrev=0)\" --generate-notes",
+    "release:minor": "pnpm version minor && git push --follow-tags && gh release create \"$(git describe --tags --abbrev=0)\" --generate-notes",
+    "release:major": "pnpm version major && git push --follow-tags && gh release create \"$(git describe --tags --abbrev=0)\" --generate-notes"
   },
   "keywords": [
     "claude",
