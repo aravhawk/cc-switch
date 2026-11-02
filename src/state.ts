@@ -1,32 +1,52 @@
-import { readFile, writeFile, mkdir } from 'fs/promises';
-import { dirname } from 'path';
-import { STATE_FILE, CC_SWITCH_DIR } from './paths.js';
+import { atomicWrite, isNotFound } from './fs-utils.js';
+import { readFile } from 'node:fs/promises';
+import { getStateFilePath } from './paths.js';
+import { validateProfileName } from './validation.js';
 import type { State } from './types.js';
 
-const DEFAULT_STATE: State = {
-  activeProfile: 'default',
-  lastSyncedAt: new Date().toISOString(),
-};
+export const DEFAULT_PROFILE_NAME = 'default';
+
+function defaultState(): State {
+  return {
+    activeProfile: DEFAULT_PROFILE_NAME,
+    lastSyncedAt: new Date().toISOString(),
+  };
+}
 
 export async function readState(): Promise<State> {
+  const statePath = getStateFilePath();
+  let raw: string;
   try {
-    const data = await readFile(STATE_FILE, 'utf-8');
-    return JSON.parse(data) as State;
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      return DEFAULT_STATE;
-    }
+    raw = await readFile(statePath, 'utf-8');
+  } catch (error) {
+    if (isNotFound(error)) return defaultState();
     throw error;
   }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`State file is corrupt: ${statePath}. Delete it to reset the active profile marker.`);
+  }
+
+  const candidate = parsed as Partial<State> | null;
+  if (
+    !candidate ||
+    typeof candidate.activeProfile !== 'string' ||
+    !validateProfileName(candidate.activeProfile).valid
+  ) {
+    throw new Error(`State file is invalid: ${statePath}. Delete it to reset the active profile marker.`);
+  }
+
+  return {
+    activeProfile: candidate.activeProfile,
+    lastSyncedAt: typeof candidate.lastSyncedAt === 'string' ? candidate.lastSyncedAt : new Date().toISOString(),
+  };
 }
 
 export async function writeState(state: State): Promise<void> {
-  await mkdir(dirname(STATE_FILE), { recursive: true });
-
-  // Atomic write: write to temp file then rename
-  const tempFile = `${STATE_FILE}.tmp`;
-  await writeFile(tempFile, JSON.stringify(state, null, 2), 'utf-8');
-  await writeFile(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
+  await atomicWrite(getStateFilePath(), `${JSON.stringify(state, null, 2)}\n`);
 }
 
 export async function updateState(updates: Partial<State>): Promise<State> {

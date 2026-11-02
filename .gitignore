@@ -30,3 +30,7 @@ yarn.lock
 # Temp files
 *.tmp
 .cache/
+
+# Test and tooling output
+coverage/
+.vitest-cache/

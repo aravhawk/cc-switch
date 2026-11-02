@@ -1,7 +1,7 @@
 {
   "name": "@aravhawk/cc-switch",
-  "version": "3.2.0",
-  "description": "Profile manager for Claude Code settings",
+  "version": "4.0.0",
+  "description": "Profile manager for Claude Code: switch between Anthropic, open-model providers, gateways and local models",
   "type": "module",
   "bin": {
     "cc-switch": "dist/index.js"
@@ -15,6 +15,9 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "pnpm typecheck && pnpm test && pnpm build",
     "release:patch": "pnpm version patch && git push --follow-tags && gh release create \"$(git describe --tags --abbrev=0)\" --generate-notes",
     "release:minor": "pnpm version minor && git push --follow-tags && gh release create \"$(git describe --tags --abbrev=0)\" --generate-notes",
     "release:major": "pnpm version major && git push --follow-tags && gh release create \"$(git describe --tags --abbrev=0)\" --generate-notes"
@@ -24,20 +27,46 @@
     "claude-code",
     "cli",
     "profile-manager",
-    "settings"
+    "settings",
+    "provider",
+    "switch",
+    "anthropic",
+    "kimi",
+    "glm",
+    "deepseek",
+    "minimax",
+    "qwen",
+    "openrouter",
+    "ollama",
+    "llm-gateway"
   ],
   "author": "Arav",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aravhawk/cc-switch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/aravhawk/cc-switch/issues"
+  },
+  "homepage": "https://github.com/aravhawk/cc-switch#readme",
+  "packageManager": "pnpm@11.3.0",
   "engines": {
-    "node": ">=20.7.0"
+    "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "dependencies": {
-    "@clack/prompts": "^1.3.0",
-    "commander": "^14.0.3"
+    "@clack/prompts": "^1.8.1",
+    "commander": "^15.0.0",
+    "picocolors": "^1.1.1"
   },
   "devDependencies": {
-    "@types/node": "^25.6.2",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "@types/node": "^26.6.6",
+    "tsup": "^9.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
   }
 }
